@@ -44,6 +44,11 @@ module emu
 	output [12:0] VIDEO_ARX,
 	output [12:0] VIDEO_ARY,
 
+	input [11:0] ARC1X,
+	input [11:0] ARC1Y,
+	input [11:0] ARC2X,
+	input [11:0] ARC2Y,
+
 	output  [7:0] VGA_R,
 	output  [7:0] VGA_G,
 	output  [7:0] VGA_B,
@@ -191,30 +196,41 @@ assign AUDIO_S   = 1;
 assign AUDIO_MIX = 0;
 
 wire [1:0] ar = status[49:48];
-wire [7:0] arx,ary;
+wire [11:0] arx,ary;
 
 always_comb begin
-	case(res) // {V30, H40}
-		2'b00: begin // 256 x 224
-			arx = 8'd64;
-			ary = 8'd49;
-		end
-
-		2'b01: begin // 320 x 224
-			arx = status[30] ? 8'd10: 8'd64;
-			ary = status[30] ? 8'd7 : 8'd49;
-		end
-
-		2'b10: begin // 256 x 240
-			arx = 8'd128;
-			ary = 8'd105;
-		end
-
-		2'b11: begin // 320 x 240
-			arx = status[30] ? 8'd4 : 8'd128;
-			ary = status[30] ? 8'd3 : 8'd105;
-		end
-	endcase
+	if (!ar) begin
+		case(res) // {V30, H40}
+			2'b00: begin // 256 x 224
+				arx = 8'd64;
+				ary = 8'd49;
+			end
+	
+			2'b01: begin // 320 x 224
+				arx = status[30] ? 8'd10: 8'd64;
+				ary = status[30] ? 8'd7 : 8'd49;
+			end
+	
+			2'b10: begin // 256 x 240
+				arx = 8'd128;
+				ary = 8'd105;
+			end
+	
+			2'b11: begin // 320 x 240
+				arx = status[30] ? 8'd4 : 8'd128;
+				ary = status[30] ? 8'd3 : 8'd105;
+			end
+		endcase
+	end else if (ar==1) begin
+		arx = HDMI_WIDTH;
+		ary = HDMI_HEIGHT;
+	end else if (ar==2) begin
+		arx = ARC1X;
+		ary = ARC1Y;
+	end else begin
+		arx = ARC2X;
+		ary = ARC2Y;
+	end
 end
 
 wire       vcrop_en = status[34];
@@ -231,11 +247,12 @@ video_freak video_freak
 (
 	.*,
 	.VGA_DE_IN(vga_de),
-	.ARX((!ar) ? arx : (ar - 1'd1)),
-	.ARY((!ar) ? ary : 12'd0),
+	.ARX(((status[56:54]) || (!ar)) ? arx : (ar - 1'd1)),
+	.ARY(((status[56:54]) || (!ar)) ? ary : 12'd0),
 	.CROP_SIZE((en216p & vcrop_en) ? 10'd216 : 10'd0),
 	.CROP_OFF(voff),
-	.SCALE(status[55:54])
+	.SCALE(status[56:54]),
+	.FULLSCREEN(ar==2'b01)
 );
 
 // Status Bit Map:
@@ -243,7 +260,7 @@ video_freak video_freak
 // 0         1         2         3          4         5         6   
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXXXXXXXXXX
+// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXXXXXXXXXXX
 
 `include "build_id.v"
 localparam CONF_STR = {
@@ -270,7 +287,7 @@ localparam CONF_STR = {
 	"P1-;",
 	"d5P1o2,Vertical Crop,Disabled,216p(5x);",
 	"d5P1oIL,Crop Offset,0,2,4,8,10,12,-12,-10,-8,-6,-4,-2;",
-	"P1oMN,Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
+	"P1oMO,Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer,Auto HV-Integer;",
 	"P1-;",
 	"P1OT,Border,No,Yes;",
 	"P1oEF,Composite Blend,Off,On,Adaptive;",
