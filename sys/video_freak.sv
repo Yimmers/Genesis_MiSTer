@@ -29,7 +29,8 @@ module video_freak
 	input      [11:0] ARY,
 	input      [11:0] CROP_SIZE,
 	input       [4:0] CROP_OFF,
-	input       [1:0] SCALE
+	input       [2:0] SCALE,
+	input		  FULLSCREEN
 );
 
 reg        vde;
@@ -113,6 +114,7 @@ always @(posedge CLK_VIDEO) begin
 	reg [11:0] oheight;
 	reg [12:0] arxf,aryf;
 	reg  [3:0] cnt;
+	reg [11:0] w_nonint;
 
 	div_start <= 0;
 	mul_start <= 0;
@@ -157,6 +159,7 @@ always @(posedge CLK_VIDEO) begin
 				end
 
 			4: begin
+					w_nonint  <= FULLSCREEN ? HDMI_WIDTH : div_res[11:0];
 					div_num   <= div_res;
 					div_den   <= hsize;
 					div_start <= 1;
@@ -168,8 +171,12 @@ always @(posedge CLK_VIDEO) begin
 					mul_start <= 1;
 				end
 
-			6: if(mul_res <= HDMI_WIDTH) cnt <= 8;
-				else begin
+			6: if((mul_res <= HDMI_WIDTH) && !FULLSCREEN) begin
+					div_num   <= w_nonint[11:0] - mul_res[11:0];
+					div_den   <= hsize[11:1];
+					div_start <= 1;
+					cnt       <= 8;
+				end else begin
 					div_num   <= HDMI_WIDTH;
 					div_den   <= hsize;
 					div_start <= 1;
@@ -182,7 +189,7 @@ always @(posedge CLK_VIDEO) begin
 				end
 
 			8: begin
-					arxf <= {1'b1, ~SCALE[1] ? div_num[11:0] : (SCALE[0] && (wideres <= HDMI_WIDTH)) ? wideres : mul_res[11:0]};
+					arxf <= {1'b1, !SCALE[2:1] ? w_nonint[11:0] : ((div_res && SCALE[2] || SCALE[0]) && (wideres <= HDMI_WIDTH)) ? wideres : mul_res[11:0]};
 					aryf <= {1'b1, oheight};
 				end
 		endcase
